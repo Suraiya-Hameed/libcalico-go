@@ -41,6 +41,27 @@ spec:
                   64512]'
                 format: int32
                 type: integer
+              communities:
+                description: Communities contain list of community value with its
+                  arbitrary names for tagging
+                items:
+                  description: CommunityKVPair has a name assigned to a BGP community
+                    value. Value can be of format aa:nn or aa:nn:mm. If `aa:nn` format
+                    is used, standard community will be used, where `aa` and `nn`
+                    are 16 bit number If `aa:nn:mm` format is used, large community
+                    will be used, where `aa`, `nn` and `mm` are 32 bit number `aa`
+                    is an AS Number, `nn` and `mm` are per-AS identifier.
+                  properties:
+                    name:
+                      type: string
+                    value:
+                      type: string
+                  type: object
+                type: array
+              listenPort:
+                description: Port where BGP protocol should listen. Default value
+                  179
+                type: integer
               logSeverityScreen:
                 description: 'LogSeverityScreen is the log severity above which logs
                   are sent to the stdout. [Default: INFO]'
@@ -49,6 +70,27 @@ spec:
                 description: 'NodeToNodeMeshEnabled sets whether full node to node
                   BGP mesh is enabled. [Default: true]'
                 type: boolean
+              prefixAdvertisements:
+                description: PrefixAdvertisements lists the communities to be advertised
+                  per prefix
+                items:
+                  description: PrefixAdvertisements represents prefixes and the communities
+                    that should be applied to them Value for Communities can be either
+                    a community name already defined in CommunitiesList or community
+                    value of format aa:nn or aa:nn:mm. If `aa:nn` format is used,
+                    standard community will be used, where `aa` and `nn` are 16 bit
+                    number If `aa:nn:mm` format is used, large community will be used,
+                    where `aa`, `nn` and `mm` are 32 bit number `aa` is an AS Number,
+                    `nn` and `mm` are per-AS identifier.
+                  properties:
+                    cidr:
+                      type: string
+                    communities:
+                      items:
+                        type: string
+                      type: array
+                  type: object
+                type: array
               serviceClusterIPs:
                 description: ServiceClusterIPs are the CIDR blocks from which service
                   cluster IPs are allocated. If specified, Calico will advertise these

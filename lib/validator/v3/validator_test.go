@@ -2033,6 +2033,88 @@ func init() {
 		Entry("should accept valid reconciliation period on namespace",
 			api.NamespaceControllerConfig{ReconcilerPeriod: &v1.Duration{Duration: time.Second * 330}}, true,
 		),
+
+		// BGP Communities
+		Entry("should not accept communities with value and without name", api.CommunityKVPair{
+			Value: "536:785",
+		}, false),
+
+		Entry("should not accept communities with name and without value", api.CommunityKVPair{
+			Name:  "community-test",
+		}, false),
+
+		Entry("should accept communities with name and standard BGP community value", api.CommunityKVPair{
+			Name:  "community-test",
+			Value: "100:520",
+		}, true),
+
+		Entry("should accept communities with name and large BGP community value", api.CommunityKVPair{
+			Name:  "community-test",
+			Value: "100:520:56",
+		}, true),
+
+		Entry("should not accept communities with name and invalid community value/format", api.CommunityKVPair{
+			Name:  "community-test",
+			Value: "100",
+		}, false),
+
+		Entry("should not accept communities with name and invalid community value/format", api.CommunityKVPair{
+			Name:  "community-test",
+			Value: "ab-n",
+		}, false),
+
+		Entry("should not accept communities with name and invalid standard community value(> 16 bit)", api.CommunityKVPair{
+			Name:  "community-test",
+			Value: "65536:999999",
+		}, false),
+
+		Entry("should not accept communities with name and invalid large community value(> 32 bit)", api.CommunityKVPair{
+			Name:  "community-test",
+			Value: "4147483647:999999",
+		}, false),
+
+		Entry("should not accept communities without CIDR in PrefixAdvertisements", api.PrefixAdvertisements{
+			Communities: []string{"100:5964"},
+		}, false),
+
+		Entry("should not accept CIDR without communities in PrefixAdvertisements", api.PrefixAdvertisements{
+			CIDR: "192.168.10.0/28",
+		}, false),
+
+		Entry("should accept IPv4 CIDR in PrefixAdvertisements", api.PrefixAdvertisements{
+			CIDR: "192.168.10.0/28",
+			Communities: []string{"100:5964:50"},
+		}, true),
+
+		Entry("should accept IPv6 CIDR in PrefixAdvertisements", api.PrefixAdvertisements{
+			CIDR: "2001:4860::/128",
+			Communities: []string{"100:5964:50"},
+		}, true),
+
+		Entry("should accept standard BGP community value in PrefixAdvertisements", api.PrefixAdvertisements{
+			CIDR: "2001:4860::/128",
+			Communities: []string{"100:5964","200:594"},
+		}, true),
+
+		Entry("should accept large BGP community value in PrefixAdvertisements", api.PrefixAdvertisements{
+			CIDR: "2001:4860::/128",
+			Communities: []string{"100:5964:1147483647"},
+		}, true),
+
+		Entry("should not accept invalid standard community value(> 16 bit) in PrefixAdvertisements", api.PrefixAdvertisements{
+			CIDR: "2001:4860::/128",
+			Communities: []string{"100:1147483647"},
+		}, false),
+
+		Entry("should not accept invalid large community value(> 32 bit) in PrefixAdvertisements", api.PrefixAdvertisements{
+			CIDR: "2001:4860::/128",
+			Communities: []string{"100:100:5147483647"},
+		}, false),
+
+		Entry("should accept combination of large and standard BGP community value in PrefixAdvertisements", api.PrefixAdvertisements{
+			CIDR: "2001:4860::/128",
+			Communities: []string{"100:5964:1147483647","100:5223"},
+		}, true),
 	)
 }
 

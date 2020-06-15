@@ -16,6 +16,8 @@ package clientv3
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -39,15 +41,24 @@ type bgpConfigurations struct {
 	client client
 }
 
+var(
+	standardCommunity 	  = regexp.MustCompile(`^(\d+):(\d+)$`)
+	largeCommunity        = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
+)
 // Create takes the representation of a BGPConfiguration and creates it.
 // Returns the stored representation of the BGPConfiguration, and an error
 // if there is any.
 func (r bgpConfigurations) Create(ctx context.Context, res *apiv3.BGPConfiguration, opts options.SetOptions) (*apiv3.BGPConfiguration, error) {
+	fmt.Printf("\n--- libCalico: Create")
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
 
 	if err := r.ValidateDefaultOnlyFields(res); err != nil {
+		return nil, err
+	}
+
+	if err:= r.ValidatePrefixAdvertisement(res); err != nil {
 		return nil, err
 	}
 
@@ -62,6 +73,7 @@ func (r bgpConfigurations) Create(ctx context.Context, res *apiv3.BGPConfigurati
 // Returns the stored representation of the BGPConfiguration, and an error
 // if there is any.
 func (r bgpConfigurations) Update(ctx context.Context, res *apiv3.BGPConfiguration, opts options.SetOptions) (*apiv3.BGPConfiguration, error) {
+	fmt.Printf("\n--- libCalico: Update")
 	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
@@ -71,6 +83,9 @@ func (r bgpConfigurations) Update(ctx context.Context, res *apiv3.BGPConfigurati
 		return nil, err
 	}
 
+	if err:= r.ValidatePrefixAdvertisement(res); err != nil {
+		return nil, err
+	}
 	out, err := r.client.resources.Update(ctx, opts, apiv3.KindBGPConfiguration, res)
 	if out != nil {
 		return out.(*apiv3.BGPConfiguration), err
@@ -81,6 +96,7 @@ func (r bgpConfigurations) Update(ctx context.Context, res *apiv3.BGPConfigurati
 // Delete takes name of the BGPConfiguration and deletes it. Returns an
 // error if one occurs.
 func (r bgpConfigurations) Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.BGPConfiguration, error) {
+	fmt.Printf("\n--- libCalico: Delete")
 	out, err := r.client.resources.Delete(ctx, opts, apiv3.KindBGPConfiguration, noNamespace, name)
 	if out != nil {
 		return out.(*apiv3.BGPConfiguration), err
@@ -91,6 +107,7 @@ func (r bgpConfigurations) Delete(ctx context.Context, name string, opts options
 // Get takes name of the BGPConfiguration, and returns the corresponding
 // BGPConfiguration object, and an error if there is any.
 func (r bgpConfigurations) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv3.BGPConfiguration, error) {
+	fmt.Printf("\n--- libCalico: Get")
 	out, err := r.client.resources.Get(ctx, opts, apiv3.KindBGPConfiguration, noNamespace, name)
 	if out != nil {
 		return out.(*apiv3.BGPConfiguration), err
@@ -100,6 +117,7 @@ func (r bgpConfigurations) Get(ctx context.Context, name string, opts options.Ge
 
 // List returns the list of BGPConfiguration objects that match the supplied options.
 func (r bgpConfigurations) List(ctx context.Context, opts options.ListOptions) (*apiv3.BGPConfigurationList, error) {
+	fmt.Printf("\n--- libCalico: List")
 	res := &apiv3.BGPConfigurationList{}
 	if err := r.client.resources.List(ctx, opts, apiv3.KindBGPConfiguration, apiv3.KindBGPConfigurationList, res); err != nil {
 		return nil, err
@@ -110,10 +128,12 @@ func (r bgpConfigurations) List(ctx context.Context, opts options.ListOptions) (
 // Watch returns a watch.Interface that watches the BGPConfiguration that
 // match the supplied options.
 func (r bgpConfigurations) Watch(ctx context.Context, opts options.ListOptions) (watch.Interface, error) {
+	fmt.Printf("\n--- libCalico: Watch")
 	return r.client.resources.Watch(ctx, opts, apiv3.KindBGPConfiguration, nil)
 }
 
 func (r bgpConfigurations) ValidateDefaultOnlyFields(res *apiv3.BGPConfiguration) error {
+	fmt.Printf("\n--- libCalico: ValidateDefaultOnlyFields")
 	errFields := []cerrors.ErroredField{}
 	if res.ObjectMeta.GetName() != "default" {
 		if res.Spec.NodeToNodeMeshEnabled != nil {
@@ -152,4 +172,39 @@ func (r bgpConfigurations) ValidateDefaultOnlyFields(res *apiv3.BGPConfiguration
 	}
 
 	return nil
+}
+
+// Validate if all the community names passed has a value defined in CommunityKVPair
+func (r bgpConfigurations) ValidatePrefixAdvertisement(res *apiv3.BGPConfiguration) error {
+	fmt.Printf("\n--- libCalico: ValidatePrefixAdvertisement")
+
+	pa := res.Spec.PrefixAdvertisements
+	communityKVPairs := res.Spec.Communities
+
+	for _, v := range pa {
+			for _, community := range v.Communities {
+				if !standardCommunity.MatchString(community) && !largeCommunity.MatchString(community) {
+					isValidCommunity:=isCommunityNameInKVParis(community,communityKVPairs)
+					if !isValidCommunity {
+						return cerrors.ErrorValidation{
+							ErroredFields: []cerrors.ErroredField{{
+								Name:   "Specs.PrefixAdvertisements.Communities",
+								Reason: "Community used is invalid or not defined.",
+								Value:  community,
+							}},
+						}
+					}
+				}
+			}
+		}
+	return nil
+}
+
+func isCommunityNameInKVParis(community string, communityKVPairs []apiv3.CommunityKVPair) bool {
+	for _, val := range communityKVPairs {
+		if val.Name == community {
+			return true
+		}
+	}
+	return false
 }

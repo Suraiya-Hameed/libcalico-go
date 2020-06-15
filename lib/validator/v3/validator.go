@@ -19,6 +19,7 @@ import (
 	"net"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -83,6 +84,9 @@ var (
 	routeSource           = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
 	dropAcceptReturnRegex = regexp.MustCompile("^(Drop|Accept|Return)$")
 	acceptReturnRegex     = regexp.MustCompile("^(Accept|Return)$")
+	standardCommunity 	  = regexp.MustCompile(`^(\d+):(\d+)$`)
+	largeCommunity        = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
+	number				  = regexp.MustCompile(`(\d+)`)
 	reasonString          = "Reason: "
 	poolUnstictCIDR       = "IP pool CIDR is not strictly masked"
 	overlapsV4LinkLocal   = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
@@ -194,6 +198,8 @@ func init() {
 	registerStructValidator(validate, validateNetworkSet, api.NetworkSet{})
 	registerStructValidator(validate, validateRuleMetadata, api.RuleMetadata{})
 	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
+	registerStructValidator(validate, validateBGPCommunity, api.CommunityKVPair{})
+	registerStructValidator(validate, validatePrefixAdvertisements, api.PrefixAdvertisements{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -1339,6 +1345,79 @@ func validateRouteTableRange(structLevel validator.StructLevel) {
 			reason("must be a range of route table indices within 1..250"),
 			"",
 		)
+	}
+}
+
+func validateBGPCommunity(structLevel validator.StructLevel) {
+	cl := structLevel.Current().Interface().(api.CommunityKVPair)
+	fmt.Printf("\n--- Validate BGP Community: %#v", cl)
+
+	isValid:= isValidCommunity(cl.Value, structLevel)
+	if !isValid{
+		log.Warningf("community value is invalid: %v", cl.Value)
+		structLevel.ReportError(
+			reflect.ValueOf(cl.Value),
+			"Community.Value",
+			"",
+			reason("invalid community value or format used."),
+			"",
+		)
+	}
+}
+
+
+func validatePrefixAdvertisements(structLevel validator.StructLevel) {
+	pa := structLevel.Current().Interface().(api.PrefixAdvertisements)
+	_, _, err := cnet.ParseCIDROrIP(pa.CIDR)
+	if err != nil{
+		log.Warningf("CIDR value is invalid: %v", pa.CIDR)
+		structLevel.ReportError(
+			reflect.ValueOf(pa.CIDR),
+			"PrefixAdvertisements.CIDR",
+			"",
+			reason("invalid CIRD prefix value."),
+			"",
+		)
+	}
+
+	// validate communities that follow aa:nn or aa:nn:mm format
+	// community name with value already set via Spec.Communities will be validated in clientv3
+	for _,v:= range pa.Communities{
+		isValidCommunity(v,structLevel)
+	}
+}
+
+func isValidCommunity(communityValue string, structLevel validator.StructLevel)  bool {
+	if standardCommunity.MatchString(communityValue) {
+		validateCommunityValue(communityValue,structLevel,false)
+	} else if largeCommunity.MatchString(communityValue) {
+		validateCommunityValue(communityValue,structLevel,true)
+		fmt.Printf("\n--- Validate BGP largeCommunity: %s", communityValue)
+	} else {
+		return false
+	}
+	return true
+}
+
+func validateCommunityValue(val string, structLevel validator.StructLevel, isLargeCommunity bool){
+	aaVal := number.FindAllString(val, -1)
+	bitValue:=16
+	if isLargeCommunity{
+		bitValue = 32
+	}
+
+	for _, v :=range aaVal {
+		_, err := strconv.ParseUint(v, 10, bitValue)
+		if err!=nil{
+			log.Warningf("community value is invalid: %v", val)
+			structLevel.ReportError(
+				reflect.ValueOf(val),
+				"Community.Value",
+				"",
+				reason(fmt.Sprintf("invalid community value, expected %d bit value",bitValue)),
+				"",
+			)
+		}
 	}
 }
 

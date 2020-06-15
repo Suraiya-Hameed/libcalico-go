@@ -55,6 +55,15 @@ type BGPConfigurationSpec struct {
 	// ServiceClusterIPs are the CIDR blocks from which service cluster IPs are allocated.
 	// If specified, Calico will advertise these blocks, as well as any cluster IPs within them.
 	ServiceClusterIPs []ServiceClusterIPBlock `json:"serviceClusterIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_cluster_ips"`
+
+	// Communities contain list of community value with its arbitrary names for tagging
+	Communities []CommunityKVPair `json:"communities,omitempty" validate:"omitempty,dive" confignamev1:"communities"`
+
+	// PrefixAdvertisements lists the communities to be advertised per prefix
+	PrefixAdvertisements []PrefixAdvertisements `json:"prefixAdvertisements,omitempty" validate:"omitempty,dive" confignamev1:"prefix_advertisements"`
+
+	// Port where BGP protocol should listen. Default value 179
+	ListenPort uint16 `json:"listenPort,omitempty" validate:"omitempty,gt=0" confignamev1:"listen_port"`
 }
 
 // ServiceExternalIPBlock represents a single whitelisted CIDR External IP block.
@@ -65,6 +74,26 @@ type ServiceExternalIPBlock struct {
 // ServiceClusterIPBlock represents a single whitelisted CIDR block for ClusterIPs.
 type ServiceClusterIPBlock struct {
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,net"`
+}
+
+// CommunityKVPair has a name assigned to a BGP community value.
+// Value can be of format aa:nn or aa:nn:mm.
+// If `aa:nn` format is used, standard community will be used, where `aa` and `nn` are 16 bit number
+// If `aa:nn:mm` format is used, large community will be used, where `aa`, `nn` and `mm` are 32 bit number
+// `aa` is an AS Number, `nn` and `mm` are per-AS identifier.
+type CommunityKVPair struct {
+	Name string `json:"name,omitempty" validate:"required"`
+	Value string `json:"value,omitempty" validate:"required"`
+}
+
+// PrefixAdvertisements represents prefixes and the communities that should be applied to them
+// Value for Communities can be either a community name already defined in CommunitiesList or community value of format aa:nn or aa:nn:mm.
+// If `aa:nn` format is used, standard community will be used, where `aa` and `nn` are 16 bit number
+// If `aa:nn:mm` format is used, large community will be used, where `aa`, `nn` and `mm` are 32 bit number
+// `aa` is an AS Number, `nn` and `mm` are per-AS identifier.
+type PrefixAdvertisements struct {
+	CIDR string `json:"cidr,omitempty" validate:"required,net"`
+	Communities []string `json:"communities,omitempty" validate:"required"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
