@@ -84,9 +84,11 @@ var (
 	routeSource           = regexp.MustCompile("^(WorkloadIPs|CalicoIPAM)$")
 	dropAcceptReturnRegex = regexp.MustCompile("^(Drop|Accept|Return)$")
 	acceptReturnRegex     = regexp.MustCompile("^(Accept|Return)$")
-	standardCommunity 	  = regexp.MustCompile(`^(\d+):(\d+)$`)
+	standardCommunity     = regexp.MustCompile(`^(\d+):(\d+)$`)
 	largeCommunity        = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
-	number				  = regexp.MustCompile(`(\d+)`)
+	number                = regexp.MustCompile(`(\d+)`)
+	IPv4PortFormat        = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
+	IPv6PortFormat        = regexp.MustCompile(`^\[.*\]:(\d+)$`)
 	reasonString          = "Reason: "
 	poolUnstictCIDR       = "IP pool CIDR is not strictly masked"
 	overlapsV4LinkLocal   = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
@@ -198,7 +200,7 @@ func init() {
 	registerStructValidator(validate, validateNetworkSet, api.NetworkSet{})
 	registerStructValidator(validate, validateRuleMetadata, api.RuleMetadata{})
 	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
-	registerStructValidator(validate, validateBGPCommunity, api.CommunityKVPair{})
+	registerStructValidator(validate, validateBGPCommunities, api.CommunityKVPair{})
 	registerStructValidator(validate, validatePrefixAdvertisements, api.PrefixAdvertisements{})
 }
 
@@ -999,6 +1001,22 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 		structLevel.ReportError(reflect.ValueOf(ps.Node), "Node", "",
 			reason("Node field must be empty when NodeSelector is specified"), "")
 	}
+	if ps.PeerIP != "" {
+		// If PeerIP has both IP and port, validate both
+		if IPv4PortFormat.MatchString(ps.PeerIP) || IPv6PortFormat.MatchString(ps.PeerIP) {
+			_, _, err := net.SplitHostPort(ps.PeerIP)
+			if err != nil {
+				structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
+					reason("PeerIP value is invalid, it should either be \"<IP>\" or \"<IPv4>:<port>\" or \"[<IPv6>]:<port>\"."), "")
+			}
+		} else {
+			parsedIP := net.ParseIP(ps.PeerIP)
+			if parsedIP == nil {
+				structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
+					reason("PeerIP value is invalid."), "")
+			}
+		}
+	}
 	if ps.PeerIP != "" && ps.PeerSelector != "" {
 		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
 			reason("PeerIP field must be empty when PeerSelector is specified"), "")
@@ -1348,75 +1366,60 @@ func validateRouteTableRange(structLevel validator.StructLevel) {
 	}
 }
 
-func validateBGPCommunity(structLevel validator.StructLevel) {
+func validateBGPCommunities(structLevel validator.StructLevel) {
 	cl := structLevel.Current().Interface().(api.CommunityKVPair)
-	fmt.Printf("\n--- Validate BGP Community: %#v", cl)
 
-	isValid:= isValidCommunity(cl.Value, structLevel)
-	if !isValid{
+	isValid := isValidCommunity(cl.Value, "Spec.Communities[].Value", structLevel)
+	if !isValid {
 		log.Warningf("community value is invalid: %v", cl.Value)
-		structLevel.ReportError(
-			reflect.ValueOf(cl.Value),
-			"Community.Value",
-			"",
-			reason("invalid community value or format used."),
-			"",
-		)
+		structLevel.ReportError(reflect.ValueOf(cl.Value), "Spec.Communities[].Value", "",
+			reason("invalid community value or format used."), "", )
 	}
 }
-
 
 func validatePrefixAdvertisements(structLevel validator.StructLevel) {
 	pa := structLevel.Current().Interface().(api.PrefixAdvertisements)
+
 	_, _, err := cnet.ParseCIDROrIP(pa.CIDR)
-	if err != nil{
+	if err != nil {
 		log.Warningf("CIDR value is invalid: %v", pa.CIDR)
-		structLevel.ReportError(
-			reflect.ValueOf(pa.CIDR),
-			"PrefixAdvertisements.CIDR",
-			"",
-			reason("invalid CIRD prefix value."),
-			"",
-		)
+		structLevel.ReportError(reflect.ValueOf(pa.CIDR), "Spec.PrefixAdvertisements[].CIDR", "",
+			reason("invalid CIDR value."), "", )
 	}
 
-	// validate communities that follow aa:nn or aa:nn:mm format
-	// community name with value already set via Spec.Communities will be validated in clientv3
-	for _,v:= range pa.Communities{
-		isValidCommunity(v,structLevel)
+	// Only validates PrefixAdvertisements[].Communities[] values that follow `aa:nn` or `aa:nn:mm` format,
+	// PrefixAdvertisements[].Communities[] that refers values set in Spec.Communities will be validated in clientv3.bgpconfig
+	for _, v := range pa.Communities {
+		isValidCommunity(v, "Spec.PrefixAdvertisements[].Communities[]", structLevel)
 	}
 }
 
-func isValidCommunity(communityValue string, structLevel validator.StructLevel)  bool {
+func isValidCommunity(communityValue string, fieldName string, structLevel validator.StructLevel) bool {
 	if standardCommunity.MatchString(communityValue) {
-		validateCommunityValue(communityValue,structLevel,false)
+		validateCommunityValue(communityValue, fieldName, structLevel, false)
 	} else if largeCommunity.MatchString(communityValue) {
-		validateCommunityValue(communityValue,structLevel,true)
-		fmt.Printf("\n--- Validate BGP largeCommunity: %s", communityValue)
+		validateCommunityValue(communityValue, fieldName, structLevel, true)
 	} else {
 		return false
 	}
 	return true
 }
 
-func validateCommunityValue(val string, structLevel validator.StructLevel, isLargeCommunity bool){
-	aaVal := number.FindAllString(val, -1)
-	bitValue:=16
-	if isLargeCommunity{
-		bitValue = 32
+// Validate that if standard community is used, community value must follow `aa:nn` format, where `aa` and `nn` are 16 bit integers,
+// and if large community is used, value must follow `aa:nn:mm` format, where all `aa`, `nn` and `mm` are 32 bit integers.
+func validateCommunityValue(val string, fieldName string, structLevel validator.StructLevel, isLargeCommunity bool) {
+	splitValue := number.FindAllString(val, -1)
+	bitSize := 16
+
+	if isLargeCommunity {
+		bitSize = 32
 	}
 
-	for _, v :=range aaVal {
-		_, err := strconv.ParseUint(v, 10, bitValue)
-		if err!=nil{
-			log.Warningf("community value is invalid: %v", val)
-			structLevel.ReportError(
-				reflect.ValueOf(val),
-				"Community.Value",
-				"",
-				reason(fmt.Sprintf("invalid community value, expected %d bit value",bitValue)),
-				"",
-			)
+	for _, v := range splitValue {
+		_, err := strconv.ParseUint(v, 10, bitSize)
+		if err != nil {
+			structLevel.ReportError(reflect.ValueOf(val), fieldName, "",
+				reason(fmt.Sprintf("invalid community value, expected %d bit value", bitSize)), "", )
 		}
 	}
 }

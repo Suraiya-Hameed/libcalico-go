@@ -325,7 +325,6 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 				Spec:       specDefault1,
 			}, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
-
 		},
 
 		// Test 1: Pass two fully populated BGPConfigurationSpecs and expect the series of operations to succeed.
@@ -503,11 +502,12 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 		})
 	})
 
-	Describe("BGPConfiguration communities validation", func(){
+	Describe("BGPConfiguration communities validation", func() {
 		var (
-			c clientv3.Interface
+			c   clientv3.Interface
 			err error
-			)
+		)
+
 		BeforeEach(func() {
 			c, err = clientv3.New(config)
 			Expect(err).NotTo(HaveOccurred())
@@ -516,9 +516,10 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			Expect(err).NotTo(HaveOccurred())
 			be.Clean()
 		})
-		It("should not accept community name that is not defined", func(){
+
+		It("should not accept community name that is not defined", func() {
 			specCommunities := apiv3.BGPConfigurationSpec{
-				PrefixAdvertisements:[]apiv3.PrefixAdvertisements{
+				PrefixAdvertisements: []apiv3.PrefixAdvertisements{
 					{
 						CIDR:        "192.168.10.0/28",
 						Communities: []string{"non-existent-community"},
@@ -533,7 +534,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			Expect(outError).To(HaveOccurred())
 		})
 
-		It("should accept community name whose values are defined", func(){
+		It("should accept community name whose values are defined", func() {
 			specCommunities := apiv3.BGPConfigurationSpec{
 				Communities: []apiv3.CommunityKVPair{
 					{
@@ -541,19 +542,19 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 						Value: "101:5695",
 					},
 				},
-				PrefixAdvertisements:[]apiv3.PrefixAdvertisements{
+				PrefixAdvertisements: []apiv3.PrefixAdvertisements{
 					{
 						CIDR:        "192.168.10.0/28",
-						Communities: []string{"community-test","8988:202"},
+						Communities: []string{"community-test", "8988:202"},
 					},
 				},
 			}
 
 			_, outError := c.BGPConfigurations().Create(ctx, &apiv3.BGPConfiguration{
-				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				ObjectMeta: metav1.ObjectMeta{Name: "non-default"},
 				Spec:       specCommunities,
 			}, options.SetOptions{})
-			Expect(outError).To(HaveOccurred())
+			Expect(outError).ToNot(HaveOccurred())
 		})
 	})
 })
