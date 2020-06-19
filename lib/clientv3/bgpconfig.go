@@ -40,7 +40,7 @@ type bgpConfigurations struct {
 	client client
 }
 
-var(
+var (
 	standardCommunity = regexp.MustCompile(`^(\d+):(\d+)$`)
 	largeCommunity    = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
 )
@@ -57,7 +57,7 @@ func (r bgpConfigurations) Create(ctx context.Context, res *apiv3.BGPConfigurati
 		return nil, err
 	}
 
-	if err:= r.ValidatePrefixAdvertisements(res); err != nil {
+	if err := r.ValidatePrefixAdvertisements(res); err != nil {
 		return nil, err
 	}
 
@@ -81,7 +81,7 @@ func (r bgpConfigurations) Update(ctx context.Context, res *apiv3.BGPConfigurati
 		return nil, err
 	}
 
-	if err:= r.ValidatePrefixAdvertisements(res); err != nil {
+	if err := r.ValidatePrefixAdvertisements(res); err != nil {
 		return nil, err
 	}
 
@@ -128,7 +128,7 @@ func (r bgpConfigurations) Watch(ctx context.Context, opts options.ListOptions) 
 }
 
 func (r bgpConfigurations) ValidateDefaultOnlyFields(res *apiv3.BGPConfiguration) error {
-	var errFields []cerrors.ErroredField
+	errFields := []cerrors.ErroredField{}
 	if res.ObjectMeta.GetName() != "default" {
 		if res.Spec.NodeToNodeMeshEnabled != nil {
 			errFields = append(errFields, cerrors.ErroredField{

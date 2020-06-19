@@ -2062,7 +2062,7 @@ func init() {
 			Value: "536:785",
 		}, false),
 		Entry("should not accept communities with name and without value", api.CommunityKVPair{
-			Name:  "community-test",
+			Name: "community-test",
 		}, false),
 		Entry("should accept communities with name and standard BGP community value", api.CommunityKVPair{
 			Name:  "community-test",
@@ -2095,32 +2095,32 @@ func init() {
 			CIDR: "192.168.10.0/28",
 		}, false),
 		Entry("should accept IPv4 CIDR in PrefixAdvertisements", api.PrefixAdvertisements{
-			CIDR: "192.168.10.0/28",
+			CIDR:        "192.168.10.0/28",
 			Communities: []string{"100:5964:50"},
 		}, true),
 		Entry("should accept IPv6 CIDR in PrefixAdvertisements", api.PrefixAdvertisements{
-			CIDR: "2001:4860::/128",
+			CIDR:        "2001:4860::/128",
 			Communities: []string{"100:5964:50"},
 		}, true),
 		Entry("should accept standard BGP community value in PrefixAdvertisements", api.PrefixAdvertisements{
-			CIDR: "2001:4860::/128",
-			Communities: []string{"100:5964","200:594"},
+			CIDR:        "2001:4860::/128",
+			Communities: []string{"100:5964", "200:594"},
 		}, true),
 		Entry("should accept large BGP community value in PrefixAdvertisements", api.PrefixAdvertisements{
-			CIDR: "2001:4860::/128",
+			CIDR:        "2001:4860::/128",
 			Communities: []string{"100:5964:1147483647"},
 		}, true),
 		Entry("should not accept invalid standard community value(> 16 bit) in PrefixAdvertisements", api.PrefixAdvertisements{
-			CIDR: "2001:4860::/128",
+			CIDR:        "2001:4860::/128",
 			Communities: []string{"100:1147483647"},
 		}, false),
 		Entry("should not accept invalid large community value(> 32 bit) in PrefixAdvertisements", api.PrefixAdvertisements{
-			CIDR: "2001:4860::/128",
+			CIDR:        "2001:4860::/128",
 			Communities: []string{"100:100:5147483647"},
 		}, false),
 		Entry("should accept combination of large and standard BGP community value in PrefixAdvertisements", api.PrefixAdvertisements{
-			CIDR: "2001:4860::/128",
-			Communities: []string{"100:5964:1147483647","100:5223"},
+			CIDR:        "2001:4860::/128",
+			Communities: []string{"100:5964:1147483647", "100:5223"},
 		}, true),
 	)
 }

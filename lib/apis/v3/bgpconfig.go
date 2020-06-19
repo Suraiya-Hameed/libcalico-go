@@ -82,7 +82,7 @@ type ServiceClusterIPBlock struct {
 // If `aa:nn:mm` format is used, large community will be used, where `aa`, `nn` and `mm` are 32 bit number.
 // Where, `aa` is an AS Number, `nn` and `mm` are per-AS identifier.
 type CommunityKVPair struct {
-	Name string `json:"name,omitempty" validate:"required"`
+	Name  string `json:"name,omitempty" validate:"required"`
 	Value string `json:"value,omitempty" validate:"required"`
 }
 
@@ -92,7 +92,7 @@ type CommunityKVPair struct {
 // If `aa:nn:mm` format is used, large community will be used, where `aa`, `nn` and `mm` are 32 bit number.
 // Where,`aa` is an AS Number, `nn` and `mm` are per-AS identifier.
 type PrefixAdvertisements struct {
-	CIDR string `json:"cidr,omitempty" validate:"required,net"`
+	CIDR        string   `json:"cidr,omitempty" validate:"required,net"`
 	Communities []string `json:"communities,omitempty" validate:"required"`
 }
 

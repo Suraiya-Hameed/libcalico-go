@@ -15,12 +15,14 @@
 package updateprocessors
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
+	log "github.com/sirupsen/logrus"
 )
 
 // Create a new SyncerUpdateProcessor to sync BGPConfiguration data in v1 format for
@@ -32,10 +34,13 @@ func NewBGPConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 		func(node, name string) model.Key { return model.NodeBGPConfigKey{Nodename: node, Name: name} },
 		func(name string) model.Key { return model.GlobalBGPConfigKey{Name: name} },
 		map[string]ConfigFieldValueToV1ModelValue{
-			"loglevel":         logLevelToBirdLogLevel,
-			"node_mesh":        nodeMeshToString,
-			"svc_external_ips": svcExternalIpsToString,
-			"svc_cluster_ips":  svcClusterIpsToString,
+			"loglevel":              logLevelToBirdLogLevel,
+			"node_mesh":             nodeMeshToString,
+			"svc_external_ips":      svcExternalIpsToString,
+			"svc_cluster_ips":       svcClusterIpsToString,
+			"communities":           communitiesToString,
+			"prefix_advertisements": prefixAdvertisementsToString,
+			"listen_port":           listenPortToString,
 		},
 	)
 }
@@ -99,4 +104,40 @@ var svcClusterIpsToString = func(value interface{}) interface{} {
 	}
 
 	return strings.Join(ipCidrs, ",")
+}
+
+// return JSON encoded string of CommunityKVPair
+var communitiesToString = func(value interface{}) interface{} {
+	communities := value.([]apiv3.CommunityKVPair)
+	if len(communities) == 0 {
+		return nil
+	}
+	communitiesStr, err := json.Marshal(communities)
+	if err != nil {
+		log.Errorf("Error converting []apiv3.CommunityKVPair to string %+v", err)
+		return nil
+	}
+	return communitiesStr
+}
+
+// return JSON encoded string of PrefixAdvertisements
+var prefixAdvertisementsToString = func(value interface{}) interface{} {
+	pa := value.([]apiv3.PrefixAdvertisements)
+	if len(pa) == 0 {
+		return nil
+	}
+	paStr, err := json.Marshal(pa)
+	if err != nil {
+		log.Errorf("Error converting []apiv3.PrefixAdvertisements to string %+v", err)
+		return nil
+	}
+	return paStr
+}
+
+var listenPortToString = func(value interface{}) interface{} {
+	listenPort := value.(uint16)
+	if listenPort == 0 {
+		return nil
+	}
+	return listenPort
 }

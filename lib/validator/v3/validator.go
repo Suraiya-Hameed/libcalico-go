@@ -88,7 +88,7 @@ var (
 	largeCommunity        = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
 	number                = regexp.MustCompile(`(\d+)`)
 	IPv4PortFormat        = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
-	IPv6PortFormat        = regexp.MustCompile(`^\[.*\]:(\d+)$`)
+	IPv6PortFormat        = regexp.MustCompile(`^\[.+\]:(\d+)$`)
 	reasonString          = "Reason: "
 	poolUnstictCIDR       = "IP pool CIDR is not strictly masked"
 	overlapsV4LinkLocal   = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
@@ -1373,7 +1373,7 @@ func validateBGPCommunities(structLevel validator.StructLevel) {
 	if !isValid {
 		log.Warningf("community value is invalid: %v", cl.Value)
 		structLevel.ReportError(reflect.ValueOf(cl.Value), "Spec.Communities[].Value", "",
-			reason("invalid community value or format used."), "", )
+			reason("invalid community value or format used."), "")
 	}
 }
 
@@ -1384,7 +1384,7 @@ func validatePrefixAdvertisements(structLevel validator.StructLevel) {
 	if err != nil {
 		log.Warningf("CIDR value is invalid: %v", pa.CIDR)
 		structLevel.ReportError(reflect.ValueOf(pa.CIDR), "Spec.PrefixAdvertisements[].CIDR", "",
-			reason("invalid CIDR value."), "", )
+			reason("invalid CIDR value."), "")
 	}
 
 	// Only validates PrefixAdvertisements[].Communities[] values that follow `aa:nn` or `aa:nn:mm` format,
@@ -1419,7 +1419,7 @@ func validateCommunityValue(val string, fieldName string, structLevel validator.
 		_, err := strconv.ParseUint(v, 10, bitSize)
 		if err != nil {
 			structLevel.ReportError(reflect.ValueOf(val), fieldName, "",
-				reason(fmt.Sprintf("invalid community value, expected %d bit value", bitSize)), "", )
+				reason(fmt.Sprintf("invalid community value, expected %d bit value", bitSize)), "")
 		}
 	}
 }
