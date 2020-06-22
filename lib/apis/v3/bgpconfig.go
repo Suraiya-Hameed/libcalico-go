@@ -57,10 +57,10 @@ type BGPConfigurationSpec struct {
 	ServiceClusterIPs []ServiceClusterIPBlock `json:"serviceClusterIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_cluster_ips"`
 
 	// Communities contain list of BGP community values and their arbitrary names for tagging routes.
-	Communities []CommunityKVPair `json:"communities,omitempty" validate:"omitempty,dive" confignamev1:"communities"`
+	Communities []Community `json:"communities,omitempty" validate:"omitempty,dive" confignamev1:"communities"`
 
-	// PrefixAdvertisements lists the communities to be advertised per prefix.
-	PrefixAdvertisements []PrefixAdvertisements `json:"prefixAdvertisements,omitempty" validate:"omitempty,dive" confignamev1:"prefix_advertisements"`
+	// PrefixAdvertisement lists the communities to be advertised per prefix.
+	PrefixAdvertisements []PrefixAdvertisement `json:"prefixAdvertisements,omitempty" validate:"omitempty,dive" confignamev1:"prefix_advertisements"`
 
 	// ListenPort is the port where BGP protocol should listen. Defaults to 179
 	ListenPort uint16 `json:"listenPort,omitempty" validate:"omitempty,gt=0" confignamev1:"listen_port"`
@@ -76,22 +76,22 @@ type ServiceClusterIPBlock struct {
 	CIDR string `json:"cidr,omitempty" validate:"omitempty,net"`
 }
 
-// CommunityKVPair contains community value and its name.
+// Community contains community value and its name.
 // BGP community value can be of format `aa:nn` or `aa:nn:mm`.
 // If `aa:nn` format is used, standard community will be used, where `aa` and `nn` are 16 bit number.
 // If `aa:nn:mm` format is used, large community will be used, where `aa`, `nn` and `mm` are 32 bit number.
 // Where, `aa` is an AS Number, `nn` and `mm` are per-AS identifier.
-type CommunityKVPair struct {
+type Community struct {
 	Name  string `json:"name,omitempty" validate:"required"`
 	Value string `json:"value,omitempty" validate:"required"`
 }
 
-// PrefixAdvertisements contains communities that should be applied to a route if it belong to a prefix.
+// PrefixAdvertisement contains communities that should be applied to a route if it belong to a prefix.
 // `Communities` can be list of either community names already defined in `Specs.Communities` or community value of format `aa:nn` or `aa:nn:mm`.
 // If `aa:nn` format is used, standard community will be used, where `aa` and `nn` are 16 bit number.
 // If `aa:nn:mm` format is used, large community will be used, where `aa`, `nn` and `mm` are 32 bit number.
 // Where,`aa` is an AS Number, `nn` and `mm` are per-AS identifier.
-type PrefixAdvertisements struct {
+type PrefixAdvertisement struct {
 	CIDR        string   `json:"cidr,omitempty" validate:"required,net"`
 	Communities []string `json:"communities,omitempty" validate:"required"`
 }

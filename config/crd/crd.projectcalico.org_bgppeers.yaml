@@ -51,7 +51,9 @@ spec:
               peerIP:
                 description: The IP address of the peer followed by an optional port
                   number to peer with. If port number is given, format should be `[<IPv6>]:port`
-                  or `<IPv4>:<port>` for IPv4. Default port number is 179.
+                  or `<IPv4>:<port>` for IPv4. Default port number is 179. Port number
+                  used by this peer if it is targeting other calico/node will be the
+                  `listenPort` set in `BGPConfiguration`
                 type: string
               peerSelector:
                 description: Selector for the remote nodes to peer with.  When this

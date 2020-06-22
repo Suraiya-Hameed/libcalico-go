@@ -57,10 +57,6 @@ func (r bgpConfigurations) Create(ctx context.Context, res *apiv3.BGPConfigurati
 		return nil, err
 	}
 
-	if err := r.ValidatePrefixAdvertisements(res); err != nil {
-		return nil, err
-	}
-
 	out, err := r.client.resources.Create(ctx, opts, apiv3.KindBGPConfiguration, res)
 	if out != nil {
 		return out.(*apiv3.BGPConfiguration), err
@@ -78,10 +74,6 @@ func (r bgpConfigurations) Update(ctx context.Context, res *apiv3.BGPConfigurati
 
 	// Check that NodeToNodeMeshEnabled and ASNumber are set. Can only be set on "default".
 	if err := r.ValidateDefaultOnlyFields(res); err != nil {
-		return nil, err
-	}
-
-	if err := r.ValidatePrefixAdvertisements(res); err != nil {
 		return nil, err
 	}
 
@@ -166,38 +158,4 @@ func (r bgpConfigurations) ValidateDefaultOnlyFields(res *apiv3.BGPConfiguration
 	}
 
 	return nil
-}
-
-// If a value in Spec.PrefixAdvertisements[x].Communities does not match standard or large BGP community format,
-// check if it is a community name with value already defined in Spec.Communities
-func (r bgpConfigurations) ValidatePrefixAdvertisements(res *apiv3.BGPConfiguration) error {
-	pa := res.Spec.PrefixAdvertisements
-	communityKVPairs := res.Spec.Communities
-
-	for _, v := range pa {
-		for _, community := range v.Communities {
-			if !standardCommunity.MatchString(community) && !largeCommunity.MatchString(community) {
-				isValidCommunity := isCommunityNameInKVParis(community, communityKVPairs)
-				if !isValidCommunity {
-					return cerrors.ErrorValidation{
-						ErroredFields: []cerrors.ErroredField{{
-							Name:   "Spec.PrefixAdvertisements.Communities",
-							Reason: "community used is invalid or not defined.",
-							Value:  community,
-						}},
-					}
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func isCommunityNameInKVParis(community string, communityKVPairs []apiv3.CommunityKVPair) bool {
-	for _, val := range communityKVPairs {
-		if val.Name == community {
-			return true
-		}
-	}
-	return false
 }

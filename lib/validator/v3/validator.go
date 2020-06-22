@@ -88,7 +88,7 @@ var (
 	largeCommunity        = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
 	number                = regexp.MustCompile(`(\d+)`)
 	IPv4PortFormat        = regexp.MustCompile(`^(\d+).(\d+).(\d+).(\d+):(\d+)$`)
-	IPv6PortFormat        = regexp.MustCompile(`^\[.+\]:(\d+)$`)
+	IPv6PortFormat        = regexp.MustCompile(`^\[[0-9a-fA-F:.]+\]:(\d+)$`)
 	reasonString          = "Reason: "
 	poolUnstictCIDR       = "IP pool CIDR is not strictly masked"
 	overlapsV4LinkLocal   = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
@@ -165,6 +165,7 @@ func init() {
 	registerFieldValidator("regexp", validateRegexp)
 	registerFieldValidator("routeSource", validateRouteSource)
 	registerFieldValidator("wireguardPublicKey", validateWireguardPublicKey)
+	registerFieldValidator("IP:port", validateIPPort)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -200,8 +201,8 @@ func init() {
 	registerStructValidator(validate, validateNetworkSet, api.NetworkSet{})
 	registerStructValidator(validate, validateRuleMetadata, api.RuleMetadata{})
 	registerStructValidator(validate, validateRouteTableRange, api.RouteTableRange{})
-	registerStructValidator(validate, validateBGPCommunities, api.CommunityKVPair{})
-	registerStructValidator(validate, validatePrefixAdvertisements, api.PrefixAdvertisements{})
+	registerStructValidator(validate, validateBGPConfigurationSpec, api.BGPConfigurationSpec{})
+
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -513,6 +514,29 @@ func validateCIDR(fl validator.FieldLevel) bool {
 	log.Debugf("Validate IP network: %s", n)
 	_, _, err := cnet.ParseCIDROrIP(n)
 	return err == nil
+}
+
+// validateIPPort validates the IP and Port given in either <IPv4>:<port> or [<IPv6>]:<port> or <IP> format
+func validateIPPort(fl validator.FieldLevel) bool {
+	ipPort := fl.Field().String()
+	if ipPort != "" {
+		// If PeerIP has both IP and port, validate both
+		if IPv4PortFormat.MatchString(ipPort) || IPv6PortFormat.MatchString(ipPort) {
+			_, _, err := net.SplitHostPort(ipPort)
+			if err != nil {
+				log.Debugf("PeerIP value is invalid, it should either be \"<IP>\" or \"<IPv4>:<port>\" or \"[<IPv6>]:<port>\".")
+				return false
+			}
+		} else {
+			parsedIP := net.ParseIP(ipPort)
+			if parsedIP == nil {
+				log.Debugf("PeerIP value is invalid.")
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // validateHTTPMethods checks if the HTTP method match clauses are valid.
@@ -1001,22 +1025,6 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 		structLevel.ReportError(reflect.ValueOf(ps.Node), "Node", "",
 			reason("Node field must be empty when NodeSelector is specified"), "")
 	}
-	if ps.PeerIP != "" {
-		// If PeerIP has both IP and port, validate both
-		if IPv4PortFormat.MatchString(ps.PeerIP) || IPv6PortFormat.MatchString(ps.PeerIP) {
-			_, _, err := net.SplitHostPort(ps.PeerIP)
-			if err != nil {
-				structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
-					reason("PeerIP value is invalid, it should either be \"<IP>\" or \"<IPv4>:<port>\" or \"[<IPv6>]:<port>\"."), "")
-			}
-		} else {
-			parsedIP := net.ParseIP(ps.PeerIP)
-			if parsedIP == nil {
-				structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
-					reason("PeerIP value is invalid."), "")
-			}
-		}
-	}
 	if ps.PeerIP != "" && ps.PeerSelector != "" {
 		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
 			reason("PeerIP field must be empty when PeerSelector is specified"), "")
@@ -1366,32 +1374,49 @@ func validateRouteTableRange(structLevel validator.StructLevel) {
 	}
 }
 
-func validateBGPCommunities(structLevel validator.StructLevel) {
-	cl := structLevel.Current().Interface().(api.CommunityKVPair)
+func validateBGPConfigurationSpec(structLevel validator.StructLevel) {
+	spec := structLevel.Current().Interface().(api.BGPConfigurationSpec)
 
-	isValid := isValidCommunity(cl.Value, "Spec.Communities[].Value", structLevel)
-	if !isValid {
-		log.Warningf("community value is invalid: %v", cl.Value)
-		structLevel.ReportError(reflect.ValueOf(cl.Value), "Spec.Communities[].Value", "",
-			reason("invalid community value or format used."), "")
+	//check if Spec.Communities[] are valid
+	communities := spec.Communities
+	for _, community := range communities {
+		isValid := isValidCommunity(community.Value, "Spec.Communities[].Value", structLevel)
+		if !isValid {
+			log.Warningf("community value is invalid: %v", community.Value)
+			structLevel.ReportError(reflect.ValueOf(community.Value), "Spec.Communities[].Value", "",
+				reason("invalid community value or format used."), "")
+		}
+	}
+
+	// check if Spec.PrefixAdvertisement.Communities are valid
+	pas := spec.PrefixAdvertisements
+	for _, pa := range pas {
+		_, _, err := cnet.ParseCIDROrIP(pa.CIDR)
+		if err != nil {
+			log.Warningf("CIDR value is invalid: %v", pa.CIDR)
+			structLevel.ReportError(reflect.ValueOf(pa.CIDR), "Spec.PrefixAdvertisement[].CIDR", "",
+				reason("invalid CIDR value."), "")
+		}
+
+		for _, v := range pa.Communities {
+			isValid := isValidCommunity(v, "Spec.PrefixAdvertisement[].Communities[]", structLevel)
+			if !isValid {
+				if !isCommunityDefined(v, communities) {
+					structLevel.ReportError(reflect.ValueOf(v), "Spec.PrefixAdvertisement[].Communities[]", "",
+						reason("community used is invalid or not defined."), "")
+				}
+			}
+		}
 	}
 }
 
-func validatePrefixAdvertisements(structLevel validator.StructLevel) {
-	pa := structLevel.Current().Interface().(api.PrefixAdvertisements)
-
-	_, _, err := cnet.ParseCIDROrIP(pa.CIDR)
-	if err != nil {
-		log.Warningf("CIDR value is invalid: %v", pa.CIDR)
-		structLevel.ReportError(reflect.ValueOf(pa.CIDR), "Spec.PrefixAdvertisements[].CIDR", "",
-			reason("invalid CIDR value."), "")
+func isCommunityDefined(community string, communityKVPairs []api.Community) bool {
+	for _, val := range communityKVPairs {
+		if val.Name == community {
+			return true
+		}
 	}
-
-	// Only validates PrefixAdvertisements[].Communities[] values that follow `aa:nn` or `aa:nn:mm` format,
-	// PrefixAdvertisements[].Communities[] that refers values set in Spec.Communities will be validated in clientv3.bgpconfig
-	for _, v := range pa.Communities {
-		isValidCommunity(v, "Spec.PrefixAdvertisements[].Communities[]", structLevel)
-	}
+	return false
 }
 
 func isValidCommunity(communityValue string, fieldName string, structLevel validator.StructLevel) bool {

@@ -47,7 +47,8 @@ type BGPPeerSpec struct {
 	// The IP address of the peer followed by an optional port number to peer with.
 	// If port number is given, format should be `[<IPv6>]:port` or `<IPv4>:<port>` for IPv4.
 	// Default port number is 179.
-	PeerIP string `json:"peerIP" validate:"omitempty"`
+	// Port number used by this peer if it is targeting other calico/node will be the `listenPort` set in `BGPConfiguration`
+	PeerIP string `json:"peerIP" validate:"omitempty,IP:port"`
 	// The AS Number of the peer.
 	ASNumber numorstring.ASNumber `json:"asNumber"`
 	// Selector for the nodes that should have this peering.  When this is set, the Node
