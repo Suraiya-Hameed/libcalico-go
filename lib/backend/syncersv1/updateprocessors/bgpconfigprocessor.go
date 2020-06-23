@@ -15,6 +15,8 @@
 package updateprocessors
 
 import (
+	"encoding/json"
+	log "github.com/sirupsen/logrus"
 	"reflect"
 	"strconv"
 	"strings"
@@ -110,12 +112,13 @@ var communities = func(value interface{}) interface{} {
 	if len(communities) == 0 {
 		return nil
 	}
-	return &model.KVPair{
-		Key: model.ResourceKey{
-			Name: "communities",
-		},
-		Value: &communities,
+
+	val, err := json.Marshal(communities)
+	if err != nil {
+		log.Errorf("Error serializing Spec.Community %#v", err)
+		return nil
 	}
+	return string(val)
 }
 
 var prefixAdvertisements = func(value interface{}) interface{} {
@@ -123,12 +126,12 @@ var prefixAdvertisements = func(value interface{}) interface{} {
 	if len(pa) == 0 {
 		return nil
 	}
-	return &model.KVPair{
-		Key: model.ResourceKey{
-			Name: "prefixAdvertisements",
-		},
-		Value: &pa,
+	val, err := json.Marshal(pa)
+	if err != nil {
+		log.Errorf("Error serializing Spec.PrefixAdvertisements %#v",err)
+		return nil
 	}
+	return string(val)
 }
 
 var listenPort = func(value interface{}) interface{} {
@@ -136,10 +139,5 @@ var listenPort = func(value interface{}) interface{} {
 	if listenPort == 0 {
 		return nil
 	}
-	return &model.KVPair{
-		Key: model.ResourceKey{
-			Name: "listenPort",
-		},
-		Value: strconv.Itoa(int(listenPort)),
-	}
+	return strconv.Itoa(int(listenPort))
 }
